@@ -97,6 +97,9 @@ python实现内容提取，预设两种使用场景：
 >
 >一键生成字幕，保存在视频同目录，可以后续通过合成方式完成合成（演示时无需合成，只需挂载播放）
 
+>确保ffmpeg配置完整
+>确保输入视频为mp4格式，时长不宜太长。
+
 
 
 变声器：[Releases · RVC-Project/Retrieval-based-Voice-Conversion-WebUI](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI/releases)
