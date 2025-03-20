@@ -1,0 +1,31 @@
+{
+  "name": "ai-voice-synthesis-frontend",
+  "version": "1.0.0",
+  "description": "AI语音合成教学软件前端项目",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [
+    "ai",
+    "voice",
+    "synthesis",
+    "education"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "vue": "^3.3.4",
+    "vue-router": "^4.2.4",
+    "pinia": "^2.1.6",
+    "axios": "^1.5.0",
+    "element-plus": "^2.3.12"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^4.3.4",
+    "vite": "^4.4.9",
+    "sass": "^1.66.1"
+  }
+} 
