@@ -2,11 +2,15 @@
   "name": "ai-voice-synthesis-frontend",
   "version": "1.0.0",
   "description": "AI语音合成教学软件前端项目",
-  "main": "index.js",
+  "main": "main.js",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "electron:dev": "concurrently \"npm run dev\" \"cross-env NODE_ENV=development electron .\"",
+    "electron:build": "cross-env CSC_IDENTITY_AUTO_DISCOVERY=false npm run build && electron-builder --win --publish never",
+    "electron:portable": "cross-env CSC_IDENTITY_AUTO_DISCOVERY=false USE_HARD_LINKS=false npm run build && node electron-portable.js",
+    "electron:no-sign": "cross-env CSC_IDENTITY_AUTO_DISCOVERY=false USE_HARD_LINKS=false npm run build && node no-sign-build.js"
   },
   "keywords": [
     "ai",
@@ -26,6 +30,46 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^4.3.4",
     "vite": "^4.4.9",
-    "sass": "^1.66.1"
+    "sass": "^1.66.1",
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3"
+  },
+  "build": {
+    "appId": "com.aivoice.education",
+    "productName": "AI语音合成教学软件",
+    "directories": {
+      "output": "electron-dist"
+    },
+    "files": [
+      "dist/**/*",
+      "main.js",
+      "preload.js"
+    ],
+    "asarUnpack": [
+      "node_modules/7zip-bin/**/*"
+    ],
+    "asar": false,
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "src/assets/icon.ico",
+      "artifactName": "${productName}-Setup-${version}.${ext}",
+      "publisherName": "AI Voice Education"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "src/assets/icon.icns"
+    },
+    "electronDownload": {
+      "mirror": "https://npmmirror.com/mirrors/electron/"
+    }
   }
 } 

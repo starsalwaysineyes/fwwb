@@ -16,10 +16,6 @@
     <main class="app-main">
       <router-view />
     </main>
-    
-    <footer class="app-footer">
-      <p>© 2025 AI语音合成教学软件</p>
-    </footer>
   </div>
 </template>
 
@@ -103,13 +99,5 @@ body {
   max-width: 1200px;
   width: 100%;
   margin: 0 auto;
-}
-
-.app-footer {
-  background-color: #1890ff;
-  color: white;
-  text-align: center;
-  padding: 1rem;
-  margin-top: auto;
 }
 </style> 

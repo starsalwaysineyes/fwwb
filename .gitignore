@@ -2,3 +2,4 @@ frontend/node_modules/
 *.pyc
 tasklist.md
 content.txt
+node_modules/
