@@ -11,7 +11,7 @@
         </div>
         <div class="hero-image">
           <!-- 此处可放置一个合适的示意图 -->
-          <div class="placeholder-image">AI语音合成示意图</div>
+          <img src="../assets/images/voice.png" alt="AI语音合成示意图" class="placeholder-image">
         </div>
       </section>
 

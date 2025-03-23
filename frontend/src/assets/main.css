@@ -36,6 +36,21 @@
   background-color: #ff7875;
 }
 
+/* Element Plus 按钮样式重置 */
+.el-button {
+  position: relative;
+  border: none;
+  z-index: 1;
+}
+
+.el-button::before {
+  display: none;
+}
+
+.el-button::after {
+  display: none;
+}
+
 /* 卡片样式 */
 .card {
   background-color: white;
