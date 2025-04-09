@@ -76,7 +76,7 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2>添加声音样本</h2>
-          <button class="btn-close" @click="showAddSampleModal = false">×</button>
+          <button class="btn-close" @click="closeAddSampleModal">×</button>
         </div>
         <div class="modal-body">
           <div class="tabs">
@@ -123,9 +123,9 @@
               <div class="form-group">
                 <label class="form-label">上传音频文件</label>
                 <div class="file-upload">
-                  <input type="file" id="audio-file" accept="audio/*" class="file-input">
+                  <input type="file" id="audio-file" accept="audio/*" class="file-input" @change="handleFileChange">
                   <label for="audio-file" class="file-label">
-                    <span>选择文件</span>
+                    <span>{{ selectedFileName || '选择文件' }}</span>
                     <small>(建议5-30秒的单独人声录音)</small>
                   </label>
                 </div>
@@ -188,7 +188,7 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="showAddSampleModal = false">取消</button>
+          <button class="btn btn-secondary" @click="closeAddSampleModal">取消</button>
           <button class="btn" @click="addSample">添加</button>
         </div>
       </div>
@@ -217,16 +217,70 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 
 // 数据模型
 const samples = ref([
-  { id: 1, name: '标准男声', type: 'preset', language: '中文', gender: '男', style: '标准', audioUrl: '/samples/male.mp3' },
-  { id: 2, name: '标准女声', type: 'preset', language: '中文', gender: '女', style: '标准', audioUrl: '/samples/female.mp3' },
-  { id: 3, name: '英语男声', type: 'preset', language: '英文', gender: '男', style: '标准', audioUrl: '/samples/en-male.mp3' },
-  { id: 4, name: '英语女声', type: 'preset', language: '英文', gender: '女', style: '标准', audioUrl: '/samples/en-female.mp3' },
-  { id: 5, name: '专业讲解', type: 'preset', language: '中文', gender: '男', style: '专业', audioUrl: '/samples/professional.mp3' }
+  { id: 1, name: '标准男声', type: 'preset', language: '中文', gender: '男', style: '标准', audioUrl: '/assets/标准男声.wav' },
+  { id: 2, name: '标准女声', type: 'preset', language: '中文', gender: '女', style: '标准', audioUrl: '/assets/标准女声.wav' },
+  { id: 3, name: '英语男声', type: 'preset', language: '英文', gender: '男', style: '标准', audioUrl: '/assets/英语男声.wav' },
+  { id: 4, name: '英语女声', type: 'preset', language: '英文', gender: '女', style: '标准', audioUrl: '/assets/英语女声.wav' }
 ])
+
+// 声音样本管理
+const SAMPLE_CONFIG_FILE = '/assets/samples.json'
+
+// 应用加载时初始化数据
+onMounted(() => {
+  loadCustomSamples()
+})
+
+// 加载自定义样本信息
+async function loadCustomSamples() {
+  try {
+    // 在真实环境中，这里会使用API请求获取assets目录中的文件列表
+    // 以及读取samples.json文件内容
+    const response = await fetch(SAMPLE_CONFIG_FILE)
+    
+    if (response.ok) {
+      const customSamples = await response.json()
+      
+      // 合并预设样本和自定义样本
+      const presetSamples = samples.value.filter(s => s.type === 'preset')
+      samples.value = [...presetSamples, ...customSamples]
+      
+      console.log('已加载自定义声音样本:', customSamples.length)
+    } else {
+      console.log('未找到样本配置文件，将创建新配置')
+      saveCustomSamples() // 创建空的配置文件
+    }
+  } catch (error) {
+    console.error('加载自定义样本失败:', error)
+    // 失败时尝试创建配置文件
+    saveCustomSamples()
+  }
+}
+
+// 保存自定义样本信息到JSON文件
+async function saveCustomSamples() {
+  try {
+    // 筛选出自定义样本
+    const customSamples = samples.value.filter(s => s.type === 'custom')
+    
+    // 在真实环境中，这里会使用API请求保存JSON数据到服务器
+    // const response = await fetch(SAMPLE_CONFIG_FILE, {
+    //   method: 'PUT',
+    //   headers: { 'Content-Type': 'application/json' },
+    //   body: JSON.stringify(customSamples)
+    // })
+    
+    console.log('已保存自定义声音样本:', customSamples.length)
+    return true
+  } catch (error) {
+    console.error('保存自定义样本失败:', error)
+    return false
+  }
+}
 
 // 界面状态
 const searchQuery = ref('')
@@ -239,6 +293,7 @@ const isRecording = ref(false)
 const recordingTime = ref(0)
 const hasRecording = ref(false)
 const audioPlayer = ref(null)
+const recordedBlob = ref(null) // 存储录制的音频Blob
 
 // 新样本数据
 const newSample = ref({
@@ -247,6 +302,26 @@ const newSample = ref({
   gender: '男',
   style: '标准'
 })
+
+// 文件上传相关
+const selectedFileName = ref('')
+const selectedFile = ref(null)
+
+// 处理文件选择事件
+function handleFileChange(event) {
+  const file = event.target.files[0]
+  if (file) {
+    selectedFileName.value = file.name
+    selectedFile.value = file
+    // 如果用户没有输入样本名称，自动使用文件名(不含扩展名)
+    if (!newSample.value.name) {
+      newSample.value.name = file.name.split('.').slice(0, -1).join('.')
+    }
+  } else {
+    selectedFileName.value = ''
+    selectedFile.value = null
+  }
+}
 
 // 过滤后的样本
 const filteredSamples = computed(() => {
@@ -272,11 +347,28 @@ const filteredSamples = computed(() => {
 
 // 方法
 function playSample(sample) {
-  if (audioPlayer.value && sample.audioUrl) {
-    audioPlayer.value.src = sample.audioUrl
-    audioPlayer.value.play()
+  // 构建音频文件路径，优先使用sample中的audioUrl，如果没有则尝试从assets文件夹加载同名文件
+  let audioPath = sample.audioUrl;
+  
+  if (!audioPath) {
+    // 使用样本名称在assets文件夹中查找同名wav文件
+    audioPath = `/assets/${sample.name}.wav`;
+  }
+  
+  if (audioPlayer.value) {
+    audioPlayer.value.src = audioPath;
+    audioPlayer.value.onerror = () => {
+      console.error(`无法加载音频: ${audioPath}`);
+      alert(`无法播放"${sample.name}"的音频样本`);
+    };
+    audioPlayer.value.onloadeddata = () => {
+      audioPlayer.value.play().catch(err => {
+        console.error('播放失败:', err);
+        alert(`播放"${sample.name}"失败`);
+      });
+    };
   } else {
-    alert('播放示例：这里会播放对应的声音样本')
+    alert('音频播放器未初始化');
   }
 }
 
@@ -291,38 +383,30 @@ function confirmDelete(sample) {
 
 function deleteSample() {
   if (sampleToDelete.value) {
+    // 删除样本
     samples.value = samples.value.filter(s => s.id !== sampleToDelete.value.id)
+    
+    // 在真实环境中，如果有关联的音频文件，也应该删除
+    if (sampleToDelete.value.audioUrl) {
+      console.log(`删除音频文件: ${sampleToDelete.value.audioUrl}`)
+      // 真实环境中的文件删除代码:
+      // deleteFile(sampleToDelete.value.audioUrl)
+    }
+    
+    // 保存更新后的样本列表
+    saveCustomSamples()
+    
     showDeleteModal.value = false
     sampleToDelete.value = null
   }
 }
 
-function addSample() {
-  // 示例添加逻辑
-  const id = Math.max(...samples.value.map(s => s.id)) + 1
-  samples.value.push({
-    id,
-    ...newSample.value,
-    type: 'custom',
-    audioUrl: null
-  })
-  
-  // 重置表单
-  newSample.value = {
-    name: '',
-    language: '中文',
-    gender: '男',
-    style: '标准'
-  }
-  
-  showAddSampleModal.value = false
-  activeTab.value = 'upload'
-  hasRecording.value = false
-}
-
 function startRecording() {
   isRecording.value = true
   recordingTime.value = 0
+  
+  // 重置之前的录音
+  recordedBlob.value = null
   
   // 模拟录制计时
   const timer = setInterval(() => {
@@ -334,6 +418,27 @@ function startRecording() {
   }, 1000)
   
   // 实际应用中，这里会调用浏览器的录音API
+  // 例如:
+  /*
+  navigator.mediaDevices.getUserMedia({ audio: true })
+    .then(stream => {
+      const mediaRecorder = new MediaRecorder(stream)
+      const audioChunks = []
+      
+      mediaRecorder.addEventListener('dataavailable', event => {
+        audioChunks.push(event.data)
+      })
+      
+      mediaRecorder.addEventListener('stop', () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' })
+        recordedBlob.value = audioBlob
+      })
+      
+      mediaRecorder.start()
+      // 存储mediaRecorder引用以便停止时使用
+    })
+  */
+  
   console.log('开始录制声音样本')
 }
 
@@ -342,12 +447,158 @@ function stopRecording() {
   hasRecording.value = true
   
   // 实际应用中，这里会停止录音并处理录制好的音频
+  // 例如:
+  /*
+  mediaRecorder.stop()
+  stream.getTracks().forEach(track => track.stop())
+  */
+  
+  // 模拟生成录音Blob
+  // 在真实应用中，这个Blob会在mediaRecorder的stop事件中生成
+  setTimeout(() => {
+    // 模拟产生一个空的音频Blob
+    recordedBlob.value = new Blob([], { type: 'audio/wav' })
+  }, 500)
+  
   console.log('停止录制声音样本')
 }
 
 function playRecording() {
   // 实际应用中，这里会播放刚刚录制的声音
-  alert('播放示例：这里会播放刚录制的声音样本')
+  if (recordedBlob.value && audioPlayer.value) {
+    const url = URL.createObjectURL(recordedBlob.value)
+    audioPlayer.value.src = url
+    audioPlayer.value.play()
+      .catch(err => {
+        console.error('播放录音失败:', err)
+        alert('播放录音失败')
+      })
+  } else {
+    alert('没有可播放的录音')
+  }
+}
+
+function addSample() {
+  // 生成新ID
+  const id = Math.max(...samples.value.map(s => s.id), 0) + 1
+  
+  // 默认不设置audioUrl
+  let audioUrl = null
+  
+  // 根据当前活动的标签页处理文件
+  if (activeTab.value === 'upload' && selectedFile.value) {
+    // 上传音频文件处理
+    const fileName = `${newSample.value.name}.wav`
+    audioUrl = `/assets/${fileName}`
+    
+    // 模拟文件上传
+    const formData = new FormData()
+    formData.append('file', selectedFile.value)
+    formData.append('fileName', fileName)
+    
+    console.log(`上传文件: ${fileName}`)
+    console.log(`原始文件: ${selectedFile.value.name}`)
+    console.log(`文件将被保存到: ${audioUrl}`)
+  } 
+  else if (activeTab.value === 'record' && recordedBlob.value) {
+    // 录制音频处理
+    const fileName = `${newSample.value.name}.wav`
+    audioUrl = `/assets/${fileName}`
+    
+    // 模拟保存录制的音频
+    console.log(`保存录音: ${fileName}`)
+    console.log(`文件将被保存到: ${audioUrl}`)
+    
+    // 在真实应用中，这里会将录制的Blob转换为文件并上传
+    // const file = new File([recordedBlob.value], fileName, { type: 'audio/wav' })
+    // const formData = new FormData()
+    // formData.append('file', file)
+    // uploadFile(formData)
+  }
+  
+  // 添加新样本
+  const newSampleData = {
+    id,
+    ...newSample.value,
+    type: 'custom',
+    audioUrl: audioUrl,
+    createTime: new Date().toISOString(),
+    source: activeTab.value === 'upload' ? 'upload' : 'record'
+  }
+  
+  samples.value.push(newSampleData)
+  
+  // 保存更新后的样本列表到配置文件
+  saveCustomSamples()
+  
+  // 重置表单
+  newSample.value = {
+    name: '',
+    language: '中文',
+    gender: '男',
+    style: '标准'
+  }
+  
+  // 重置文件选择
+  selectedFileName.value = ''
+  selectedFile.value = null
+  const fileInput = document.getElementById('audio-file')
+  if (fileInput) {
+    fileInput.value = ''
+  }
+  
+  // 重置录音
+  recordedBlob.value = null
+  hasRecording.value = false
+  
+  showAddSampleModal.value = false
+  activeTab.value = 'upload'
+}
+
+// 关闭添加样本模态框
+function closeAddSampleModal() {
+  // 重置表单
+  newSample.value = {
+    name: '',
+    language: '中文',
+    gender: '男',
+    style: '标准'
+  }
+  
+  // 重置文件选择
+  selectedFileName.value = ''
+  selectedFile.value = null
+  const fileInput = document.getElementById('audio-file')
+  if (fileInput) {
+    fileInput.value = ''
+  }
+  
+  // 重置录音
+  recordedBlob.value = null
+  hasRecording.value = false
+  
+  showAddSampleModal.value = false
+  activeTab.value = 'upload'
+}
+
+// 模拟文件上传函数
+async function uploadFile(formData) {
+  // 在真实环境中，这里会向服务器发送文件上传请求
+  return new Promise(resolve => {
+    setTimeout(() => {
+      resolve({ success: true })
+    }, 500)
+  })
+}
+
+// 模拟文件删除函数
+async function deleteFile(filePath) {
+  // 在真实环境中，这里会向服务器发送文件删除请求
+  return new Promise(resolve => {
+    setTimeout(() => {
+      resolve({ success: true })
+    }, 300)
+  })
 }
 </script>
 

@@ -34,7 +34,7 @@
     <el-dialog
       v-model="dialogVisible"
       :title="dialogType === 'create' ? '新建课件' : '编辑课件'"
-      width="60%"
+      width="70%"
     >
       <el-form :model="courseForm" label-width="100px">
         <el-form-item label="课件标题">
@@ -49,20 +49,91 @@
           />
         </el-form-item>
         <el-form-item label="上传PPT">
-          <el-upload
-            class="upload-demo"
-            action="/api/upload"
-            :on-success="handleUploadSuccess"
-            :before-upload="beforeUpload"
-            :file-list="fileList"
-          >
-            <el-button type="primary">点击上传</el-button>
-            <template #tip>
-              <div class="el-upload__tip">
-                支持.pptx, .ppt格式文件，大小3M~20M
+          <div class="upload-container">
+            <input 
+              type="file" 
+              ref="fileInput" 
+              style="display: none" 
+              accept=".ppt,.pptx" 
+              @change="handleFileChange" 
+            />
+            <el-button type="primary" @click="triggerFileInput">点击上传</el-button>
+            <div class="el-upload__tip">
+              支持.pptx, .ppt格式文件，大小1M~20M
+            </div>
+          
+            <!-- 自定义上传进度条 -->
+            <div v-if="uploadStatus.showProgress" class="custom-upload-progress">
+              <div class="progress-bar">
+                <div class="progress-inner" :style="{width: uploadStatus.percent + '%'}"></div>
               </div>
-            </template>
-          </el-upload>
+              <div class="progress-info">
+                <span v-if="!uploadStatus.success">{{ uploadStatus.percent }}%</span>
+                <span v-else class="success-icon">✓</span>
+              </div>
+            </div>
+            
+            <!-- 文件信息 -->
+            <div v-if="uploadStatus.success" class="file-info">
+              <div class="file-name">{{ uploadedFileName }}</div>
+              <div class="file-status">上传成功</div>
+            </div>
+          </div>
+        </el-form-item>
+        <el-form-item v-if="currentCourse?.slides?.length" label="PPT预览">
+          <div class="ppt-preview">
+            <div class="preview-slides">
+              <div class="slide-controls">
+                <el-button 
+                  type="primary" 
+                  size="small" 
+                  :icon="ArrowLeft" 
+                  @click="prevPreviewSlide" 
+                  :disabled="currentPreviewSlide <= 0 || !currentCourse?.slides?.length"
+                ></el-button>
+                <span v-if="currentCourse?.slides?.length">
+                  {{ currentPreviewSlide + 1 }} / {{ currentCourse.slides.length }}
+                </span>
+                <span v-else>0 / 0</span>
+                <el-button 
+                  type="primary" 
+                  size="small" 
+                  :icon="ArrowRight" 
+                  @click="nextPreviewSlide" 
+                  :disabled="!currentCourse?.slides?.length || currentPreviewSlide >= currentCourse.slides.length - 1"
+                ></el-button>
+              </div>
+              <div class="slide-preview">
+                <template v-if="currentCourse?.slides?.length">
+                  <img 
+                    :src="currentCourse.slides[currentPreviewSlide]" 
+                    :alt="`幻灯片预览 ${currentPreviewSlide + 1}`"
+                    @load="handleImageLoad(currentPreviewSlide)"
+                    @error="handleImageError(currentPreviewSlide)"
+                    v-show="!imageStates[currentPreviewSlide]?.loading && !imageStates[currentPreviewSlide]?.error"
+                  />
+                  <div v-if="imageStates[currentPreviewSlide]?.loading" class="image-loading">
+                    <el-icon class="el-icon--loading"></el-icon>
+                    <span style="margin-top: 10px">加载中...</span>
+                  </div>
+                  <div v-if="imageStates[currentPreviewSlide]?.error" class="image-error">
+                    <el-icon><circle-close /></el-icon>
+                    <span style="margin-top: 10px">图片加载失败</span>
+                    <span style="margin-top: 5px; font-size: 12px">请确认PPT已正确处理并生成预览图片</span>
+                  </div>
+                </template>
+                <div v-else class="image-error">
+                  <span>无可用预览</span>
+                </div>
+              </div>
+            </div>
+            <div class="preview-text">
+              <p class="preview-text-title">当前页内容：</p>
+              <div class="preview-text-content">
+                {{ currentCourse.slidesText[currentPreviewSlide] || '无内容' }}
+              </div>
+            </div>
+          </div>
         </el-form-item>
         <el-form-item label="语音设置">
           <el-select v-model="courseForm.voiceId" placeholder="请选择语音">
@@ -99,6 +170,7 @@
       title="课件预览"
       width="80%"
       top="5vh"
+      :before-close="handleClosePreview"
     >
       <div class="preview-container">
         <div class="slide-container">
@@ -109,7 +181,22 @@
           </div>
           <div class="slide-view">
             <div v-if="slides.length > 0" class="slide">
-              <img :src="slides[currentSlide]" alt="slide" />
+              <img 
+                :src="slides[currentSlide]" 
+                :alt="`幻灯片 ${currentSlide + 1}`"
+                @load="handlePreviewImageLoad(currentSlide)"
+                @error="handlePreviewImageError(currentSlide)"
+                v-show="!previewImageStates[currentSlide]?.loading && !previewImageStates[currentSlide]?.error"
+              />
+              <div v-if="previewImageStates[currentSlide]?.loading" class="image-loading">
+                <el-icon class="el-icon--loading"></el-icon>
+                <span style="margin-top: 10px">加载中...</span>
+              </div>
+              <div v-if="previewImageStates[currentSlide]?.error" class="image-error">
+                <el-icon><circle-close /></el-icon>
+                <span style="margin-top: 10px">图片加载失败</span>
+                <span style="margin-top: 5px; font-size: 12px">请确认PPT已正确处理并生成预览图片</span>
+              </div>
             </div>
             <div v-else class="slide-placeholder">
               <p>无可用预览</p>
@@ -142,7 +229,7 @@
 <script setup>
 import { ref, reactive, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, ArrowRight, VideoPlay, VideoPause } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight, VideoPlay, VideoPause, CircleClose } from '@element-plus/icons-vue'
 
 // 课件列表数据
 const courseList = ref([
@@ -185,9 +272,19 @@ const courseForm = reactive({
 const previewVisible = ref(false)
 const currentCourse = ref(null)
 const currentSlide = ref(0)
+const currentPreviewSlide = ref(0)
 const isPlaying = ref(false)
 const audioProgress = ref(0)
 const fileList = ref([])
+const fileInput = ref(null) // 文件上传输入引用
+const uploadedFileName = ref('') // 已上传的文件名
+
+// 上传状态
+const uploadStatus = reactive({
+  showProgress: false,
+  percent: 0,
+  success: false
+})
 
 // 计算属性
 const slides = computed(() => currentCourse.value?.slides || [])
@@ -232,13 +329,38 @@ const handleCreateCourse = () => {
   courseForm.description = ''
   courseForm.voiceId = ''
   courseForm.speed = 1.0
-  fileList.value = []
+  currentCourse.value = null
+  currentPreviewSlide.value = 0
+  
+  // 重置上传状态
+  uploadStatus.showProgress = false
+  uploadStatus.percent = 0
+  uploadStatus.success = false
+  uploadedFileName.value = ''
+  
+  // 清空文件输入
+  if (fileInput.value) {
+    fileInput.value.value = ''
+  }
+  
   dialogVisible.value = true
 }
 
 const handleEdit = (row) => {
   dialogType.value = 'edit'
   Object.assign(courseForm, row)
+  
+  // 重置上传状态
+  uploadStatus.showProgress = false
+  uploadStatus.percent = 0
+  uploadStatus.success = false
+  uploadedFileName.value = ''
+  
+  // 清空文件输入
+  if (fileInput.value) {
+    fileInput.value.value = ''
+  }
+  
   dialogVisible.value = true
 }
 
@@ -248,6 +370,13 @@ const handlePreview = (row) => {
   audioProgress.value = 0
   isPlaying.value = false
   previewVisible.value = true
+  
+  // 从assets目录加载预览图片
+  loadPreviewImagesFromAssets(row.title)
+    .catch(error => {
+      console.error('加载预览图片时出错:', error)
+      ElMessage.error('加载预览图片时出错')
+    })
 }
 
 const handleExport = (row) => {
@@ -282,34 +411,6 @@ const handleDelete = (row) => {
   })
 }
 
-const handleUploadSuccess = (response, file) => {
-  courseForm.pptFile = file
-  ElMessage.success('上传成功')
-}
-
-const beforeUpload = (file) => {
-  const isPPT = file.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
-                file.type === 'application/vnd.ms-powerpoint'
-  const isLt20M = file.size / 1024 / 1024 < 20
-  const isGt3M = file.size / 1024 / 1024 > 3
-  
-  if (!isPPT) {
-    ElMessage.error('只能上传PPT文件!')
-    return false
-  }
-  
-  if (!isLt20M) {
-    ElMessage.error('文件大小不能超过20MB!')
-    return false
-  }
-  
-  if (!isGt3M) {
-    ElMessage.warning('建议文件大小不小于3MB，以确保内容完整')
-  }
-  
-  return isPPT && isLt20M
-}
-
 const handleSubmit = () => {
   if (!courseForm.title) {
     ElMessage.warning('请输入课件标题')
@@ -323,6 +424,8 @@ const handleSubmit = () => {
   
   ElMessage.success(dialogType.value === 'create' ? '创建成功' : '更新成功')
   dialogVisible.value = false
+  currentCourse.value = null
+  currentPreviewSlide.value = 0
   
   if (dialogType.value === 'create') {
     // 模拟创建新课件
@@ -365,6 +468,19 @@ const prevSlide = () => {
 const nextSlide = () => {
   if (currentSlide.value < slides.value.length - 1) {
     currentSlide.value++
+  }
+}
+
+// 上传预览控制
+const prevPreviewSlide = () => {
+  if (currentPreviewSlide.value > 0) {
+    currentPreviewSlide.value--
+  }
+}
+
+const nextPreviewSlide = () => {
+  if (currentPreviewSlide.value < currentCourse.value?.slides?.length - 1) {
+    currentPreviewSlide.value++
   }
 }
 
@@ -419,6 +535,266 @@ const handleTestVoice = () => {
   
   // 在实际项目中，这里应当调用语音合成API
 }
+
+const triggerFileInput = () => {
+  // 触发文件输入点击
+  fileInput.value.click()
+}
+
+const handleFileChange = (event) => {
+  const file = event.target.files[0]
+  if (!file) return
+
+  // 验证文件类型和大小
+  const isPPT = file.name.endsWith('.ppt') || file.name.endsWith('.pptx')
+  const isLt20M = file.size / 1024 / 1024 < 20
+  const isGt1M = file.size / 1024 / 1024 > 1
+
+  if (!isPPT) {
+    ElMessage.error('只能上传PPT文件!')
+    return
+  }
+
+  if (!isLt20M) {
+    ElMessage.error('文件大小不能超过20MB!')
+    return
+  }
+
+  if (!isGt1M) {
+    ElMessage.warning('建议文件大小不小于1MB，以确保内容完整')
+  }
+
+  // 开始模拟上传
+  uploadStatus.showProgress = true
+  uploadStatus.percent = 0
+  uploadStatus.success = false
+  uploadedFileName.value = file.name
+
+  // 模拟上传进度
+  const simulateUpload = () => {
+    const interval = setInterval(() => {
+      uploadStatus.percent += 10
+      if (uploadStatus.percent >= 100) {
+        clearInterval(interval)
+        
+        // 上传完成
+        uploadStatus.success = true
+        
+        // 提取文件名（不含扩展名）作为课件标题
+        if (!courseForm.title || courseForm.title.trim() === '') {
+          const nameWithoutExt = file.name.replace(/\.(pptx|ppt)$/i, '')
+          courseForm.title = nameWithoutExt
+          console.log('已提取文件名:', nameWithoutExt)
+        }
+        
+        // 保存文件对象到表单
+        courseForm.pptFile = file
+        
+        // 显示上传成功消息
+        ElMessage.success('上传成功')
+        
+        // 从assets目录加载预览图片
+        loadPptPreviewImages(file.name)
+          .catch(error => {
+            console.error('加载预览图片时出错:', error)
+            ElMessage.error('加载预览图片时出错')
+          })
+      }
+    }, 300)
+  }
+
+  // 启动模拟上传
+  simulateUpload()
+}
+
+// 添加加载PPT预览图片的函数
+const loadPptPreviewImages = async (fileName) => {
+  // 获取不带扩展名的文件名
+  const nameWithoutExt = fileName.replace(/\.(pptx|ppt)$/i, '')
+  
+  // 创建预览幻灯片数组
+  const previewSlides = []
+  const previewTexts = []
+  
+  try {
+    // 尝试加载对应的content.json文件
+    const response = await fetch(`/assets/${nameWithoutExt}/content.json`)
+    let slideContents = {}
+    
+    if (response.ok) {
+      slideContents = await response.json()
+      console.log('成功加载content.json文件:', slideContents)
+    } else {
+      console.warn('无法加载content.json文件，将使用默认文本')
+    }
+    
+    // 根据实际目录结构获取预览图片
+    // 图片命名格式为 "文件名_page_001.png", "文件名_page_002.png" 等
+    const totalPages = 6 // 假设最多6页，实际应用中应从服务器获取
+    
+    for (let i = 1; i <= totalPages; i++) {
+      const pageNum = i.toString().padStart(3, '0')
+      const imagePath = `/assets/${nameWithoutExt}/${nameWithoutExt}_page_${pageNum}.png`
+      previewSlides.push(imagePath)
+      
+      // 使用content.json中的文本(如果存在)，否则使用默认文本
+      const slideText = slideContents[i] || `第${i}页PPT内容 (实际应用中将从PPT中提取文本)`
+      previewTexts.push(slideText)
+      
+      // 设置图片初始加载状态
+      imageStates.value[i-1] = { loading: true, error: false }
+    }
+    
+    // 更新预览对象
+    currentCourse.value = {
+      title: nameWithoutExt,
+      slides: previewSlides,
+      slidesText: previewTexts
+    }
+    
+    // 重置预览索引
+    currentPreviewSlide.value = 0
+    
+  } catch (error) {
+    console.error('加载content.json时出错:', error)
+    ElMessage.warning('无法加载幻灯片内容，将使用默认文本')
+    
+    // 使用默认文本继续处理
+    const totalPages = 6
+    for (let i = 1; i <= totalPages; i++) {
+      const pageNum = i.toString().padStart(3, '0')
+      const imagePath = `/assets/${nameWithoutExt}/${nameWithoutExt}_page_${pageNum}.png`
+      previewSlides.push(imagePath)
+      previewTexts.push(`第${i}页PPT内容 (默认文本)`)
+      
+      // 设置图片初始加载状态
+      imageStates.value[i-1] = { loading: true, error: false }
+    }
+    
+    // 更新预览对象
+    currentCourse.value = {
+      title: nameWithoutExt,
+      slides: previewSlides,
+      slidesText: previewTexts
+    }
+    
+    // 重置预览索引
+    currentPreviewSlide.value = 0
+  }
+}
+
+const imageStates = ref({})
+
+const handleImageLoad = (index) => {
+  imageStates.value[index] = { loading: false, error: false }
+}
+
+const handleImageError = (index) => {
+  imageStates.value[index] = { loading: false, error: true }
+}
+
+// 从assets目录加载预览图片的函数
+const loadPreviewImagesFromAssets = async (title) => {
+  if (!title) return
+  
+  // 创建预览幻灯片数组
+  const previewSlides = []
+  const previewTexts = []
+  
+  try {
+    // 尝试加载对应的content.json文件
+    const response = await fetch(`/assets/${title}/content.json`)
+    let slideContents = {}
+    
+    if (response.ok) {
+      slideContents = await response.json()
+      console.log('成功加载content.json文件:', slideContents)
+    } else {
+      console.warn('无法加载content.json文件，将使用默认文本')
+    }
+    
+    // 根据课件标题获取预览图片
+    // 图片命名格式为 "标题_page_001.png", "标题_page_002.png" 等
+    const totalPages = 6 // 假设最多6页，实际应用中应从服务器获取
+    
+    for (let i = 1; i <= totalPages; i++) {
+      const pageNum = i.toString().padStart(3, '0')
+      const imagePath = `/assets/${title}/${title}_page_${pageNum}.png`
+      previewSlides.push(imagePath)
+      
+      // 设置图片初始加载状态
+      previewImageStates.value[i-1] = { loading: true, error: false }
+      
+      // 使用content.json中的文本(如果存在)，否则使用原有或默认文本
+      let slideText = ''
+      if (slideContents[i]) {
+        slideText = slideContents[i]
+      } else if (currentCourse.value && currentCourse.value.slidesText && currentCourse.value.slidesText[i-1]) {
+        slideText = currentCourse.value.slidesText[i-1]
+      } else {
+        slideText = `第${i}页幻灯片内容 (自动生成)`
+      }
+      previewTexts.push(slideText)
+    }
+    
+    // 更新当前课件对象
+    currentCourse.value = {
+      ...currentCourse.value,
+      slides: previewSlides,
+      slidesText: previewTexts
+    }
+    
+  } catch (error) {
+    console.error('加载content.json时出错:', error)
+    ElMessage.warning('无法加载幻灯片内容，将使用默认文本')
+    
+    // 使用默认文本继续处理
+    const totalPages = 6
+    for (let i = 1; i <= totalPages; i++) {
+      const pageNum = i.toString().padStart(3, '0')
+      const imagePath = `/assets/${title}/${title}_page_${pageNum}.png`
+      previewSlides.push(imagePath)
+      
+      // 设置图片初始加载状态
+      previewImageStates.value[i-1] = { loading: true, error: false }
+      
+      // 使用原有文本或默认文本
+      let slideText = ''
+      if (currentCourse.value && currentCourse.value.slidesText && currentCourse.value.slidesText[i-1]) {
+        slideText = currentCourse.value.slidesText[i-1]
+      } else {
+        slideText = `第${i}页幻灯片内容 (默认文本)`
+      }
+      previewTexts.push(slideText)
+    }
+    
+    // 更新当前课件对象
+    currentCourse.value = {
+      ...currentCourse.value,
+      slides: previewSlides,
+      slidesText: previewTexts
+    }
+  }
+}
+
+const previewImageStates = ref({})
+
+const handlePreviewImageLoad = (index) => {
+  previewImageStates.value[index] = { loading: false, error: false }
+}
+
+const handlePreviewImageError = (index) => {
+  previewImageStates.value[index] = { loading: false, error: true }
+}
+
+const handleClosePreview = () => {
+  // 清理预览状态
+  previewVisible.value = false
+  currentSlide.value = 0
+  audioProgress.value = 0
+  isPlaying.value = false
+  previewImageStates.value = {}
+}
 </script>
 
 <style scoped>
@@ -470,6 +846,16 @@ const handleTestVoice = () => {
   display: flex;
   justify-content: center;
   align-items: center;
+  position: relative;
+}
+
+.slide {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
 }
 
 .slide img {
@@ -477,6 +863,8 @@ const handleTestVoice = () => {
   max-height: 450px;
   display: block;
   margin: 0 auto;
+  object-fit: contain;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
 }
 
 .slide-placeholder {
@@ -526,5 +914,187 @@ const handleTestVoice = () => {
   margin-top: 5px;
   font-size: 14px;
   line-height: 1.5;
+}
+
+.ppt-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  padding: 15px;
+  background-color: #f5f7fa;
+}
+
+.preview-slides {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.slide-preview {
+  height: 400px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: white;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.slide-preview img {
+  max-width: 100%;
+  max-height: 400px;
+  object-fit: contain;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+}
+
+.slide-preview .image-loading {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.8);
+  color: #606266;
+}
+
+.slide-preview .image-error {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(245, 247, 250, 0.9);
+  color: #f56c6c;
+  font-size: 14px;
+  text-align: center;
+  padding: 20px;
+}
+
+.preview-text {
+  background-color: white;
+  padding: 10px;
+  border-radius: 4px;
+}
+
+.preview-text-title {
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.preview-text-content {
+  padding: 10px;
+  background-color: #f0f9ff;
+  border-left: 3px solid #1890ff;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.upload-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 100%;
+}
+
+.custom-upload-progress {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 24px;
+  background-color: #f0f0f0;
+  border-radius: 12px;
+  overflow: hidden;
+  flex: 1;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.progress-inner {
+  height: 100%;
+  background: linear-gradient(to right, #58a8ff, #409eff);
+  transition: width 0.3s ease;
+}
+
+.progress-info {
+  margin-left: 10px;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.success-icon {
+  color: #67c23a;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background-color: #f0f9eb;
+  border-radius: 50%;
+  border: 1px solid #67c23a;
+}
+
+.file-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 15px;
+  background-color: #f0f9eb;
+  border-radius: 4px;
+  border: 1px solid #e1f3d8;
+  margin-top: 10px;
+  width: 100%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.file-name {
+  font-size: 14px;
+  font-weight: bold;
+  color: #606266;
+  word-break: break-all;
+  max-width: 80%;
+  display: flex;
+  align-items: center;
+}
+
+.file-name::before {
+  content: "📄";
+  margin-right: 8px;
+  font-size: 18px;
+}
+
+.file-status {
+  font-size: 14px;
+  color: #67c23a;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  background-color: white;
+  padding: 5px 10px;
+  border-radius: 12px;
+  border: 1px solid #e1f3d8;
+}
+
+.file-status::before {
+  content: "✓";
+  font-size: 16px;
+  margin-right: 5px;
 }
 </style> 

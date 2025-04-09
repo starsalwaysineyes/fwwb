@@ -1,7 +1,9 @@
 <template>
   <div class="text-to-speech-page">
     <h1>文本转语音</h1>
-    <p class="page-desc">输入文本内容，选择声音样本，生成自然流畅的语音讲解</p>
+    <p class="page-desc">
+      输入文本，选择语音样本，点击生成按钮将播放转换后的语音
+    </p>
 
     <div class="tts-container">
       <div class="text-input-section">
@@ -83,13 +85,15 @@
           </div>
           
           <div class="generation-controls">
-            <button class="btn" @click="generateSpeech" :disabled="!canGenerate">
-              生成语音
-            </button>
             <div class="checkbox-control">
-              <input type="checkbox" id="auto-play" v-model="autoPlay">
-              <label for="auto-play">生成后自动播放</label>
+              <input type="checkbox" id="autoPlay" v-model="autoPlay" />
+              <label for="autoPlay">生成后自动播放</label>
             </div>
+            
+            <button @click="generateSpeech" :disabled="!canGenerate" class="primary-btn">
+              <span v-if="!canGenerate">请输入文本并选择语音</span>
+              <span v-else>播放文本转语音结果</span>
+            </button>
           </div>
         </div>
       </div>
@@ -157,6 +161,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { assetManager } from '../components/AssetManager'
 
 // 状态数据
 const inputText = ref('')
@@ -244,26 +249,42 @@ function generateSpeech() {
     style: selectedStyle.value
   })
   
-  // 模拟生成过程
-  setTimeout(() => {
-    hasGeneratedSpeech.value = true
+  // 获取选中的声音样本
+  const selectedVoiceObj = voices.value.find(v => v.id === parseInt(selectedVoice.value))
+  
+  // 根据选择的声音，获取对应的音频文件
+  // 从assets/text2wav目录中读取标准男声.wav
+  const audioPath = `/assets/text2wav/标准男声.wav`
+  
+  // 设置音频URL
+  audioUrl.value = audioPath
+  
+  // 立即显示结果区域
+  hasGeneratedSpeech.value = true
+  
+  // 设置音频元素
+  if (audioPlayer.value) {
+    audioPlayer.value.src = audioPath
     
-    // 设置假的音频URL（实际应用中，这将是服务器返回的音频URL）
-    // 为了示例，我们使用一个静态音频文件
-    audioUrl.value = 'https://example.com/audio.mp3'
-    
-    // 设置音频元素
-    if (audioPlayer.value) {
-      // 实际应用中，这将是真实的音频URL
-      // 这里我们假设音频元素已经有了一个默认的测试音频
-      duration.value = audioPlayer.value.duration || 60 // 假设时长为60秒
+    // 加载音频完成后的事件处理
+    audioPlayer.value.onloadedmetadata = () => {
+      duration.value = audioPlayer.value.duration
       
       // 如果设置了自动播放，就播放音频
       if (autoPlay.value) {
         togglePlay()
       }
     }
-  }, 2000)
+    
+    // 加载音频错误时的处理
+    audioPlayer.value.onerror = () => {
+      console.error(`无法加载音频: ${audioPath}`)
+      alert(`无法播放音频文件，请检查是否存在该文件`)
+    }
+    
+    // 开始加载音频
+    audioPlayer.value.load()
+  }
 }
 
 function togglePlay() {
@@ -273,12 +294,19 @@ function togglePlay() {
     audioPlayer.value.pause()
     isPlaying.value = false
   } else {
-    // 实际应用中，这里会播放真实的音频
-    // 为了示例，我们只是设置状态
+    // 播放音频
     audioPlayer.value.play().catch(error => {
       console.error('播放音频失败:', error)
-      // 模拟播放
-      simulatePlayback()
+      
+      // 检查是否是文件不存在的问题
+      if (audioPlayer.value.error && audioPlayer.value.error.code === 4) {
+        alert('音频文件不存在或无法访问。请确保assets/text2wav/标准男声.wav文件存在')
+      }
+      
+      // 模拟播放（仅在开发环境中使用）
+      if (import.meta.env.DEV) {
+        simulatePlayback()
+      }
     })
     isPlaying.value = true
   }
@@ -523,5 +551,25 @@ h1 {
   .player-btn {
     align-self: center;
   }
+}
+
+.primary-btn {
+  background-color: #1890ff;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.primary-btn:hover {
+  background-color: #0c77e3;
+}
+
+.primary-btn:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
 }
 </style> 
