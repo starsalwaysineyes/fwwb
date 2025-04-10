@@ -189,7 +189,8 @@ const voices = ref([
   { id: 2, name: '标准女声', language: '中文', gender: '女', type: 'preset' },
   { id: 3, name: '英语男声', language: '英文', gender: '男', type: 'preset' },
   { id: 4, name: '英语女声', language: '英文', gender: '女', type: 'preset' },
-  { id: 5, name: '专业讲解', language: '中文', gender: '男', type: 'preset' }
+  { id: 5, name: '纪东旭', language: '中文', gender: '男', type: 'preset' },
+  { id: 6, name: '叶子洲', language: '中文', gender: '男', type: 'preset' }
 ])
 
 // 语气风格选项
@@ -254,8 +255,8 @@ function generateSpeech() {
   
   // 根据选择的声音，获取对应的音频文件
   // 从assets/text2wav目录中读取标准男声.wav
-  const audioPath = `/assets/text2wav/标准男声.wav`
-  
+  const audioPath = `/assets/text2wav/${selectedVoiceObj.name}.wav`
+  console.log(audioPath)
   // 设置音频URL
   audioUrl.value = audioPath
   

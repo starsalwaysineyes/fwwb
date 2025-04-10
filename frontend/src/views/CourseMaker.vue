@@ -295,12 +295,12 @@ const currentSlideText = computed(() => {
 
 // 语音选项
 const voiceOptions = [
-  { value: '1', label: '女声1 (标准普通话)' },
-  { value: '2', label: '男声1 (标准普通话)' },
-  { value: '3', label: '女声2 (温柔风格)' },
-  { value: '4', label: '男声2 (磁性风格)' },
-  { value: '5', label: '英语女声' },
-  { value: '6', label: '英语男声' }
+  { value: '1', label: '标准男声' },
+  { value: '2', label: '标准女声' },
+  { value: '3', label: '英语男声' },
+  { value: '4', label: '英语女声' },
+  { value: '5', label: '纪东旭' },
+  { value: '6', label: '叶子洲' }
 ]
 
 // 状态相关方法
@@ -461,13 +461,29 @@ const handleSubmit = () => {
 // 预览控制
 const prevSlide = () => {
   if (currentSlide.value > 0) {
+    // 停止当前音频
+    if (currentAudio.value) {
+      currentAudio.value.pause()
+      currentAudio.value = null
+    }
+    
     currentSlide.value--
+    audioProgress.value = 0
+    isPlaying.value = false
   }
 }
 
 const nextSlide = () => {
   if (currentSlide.value < slides.value.length - 1) {
+    // 停止当前音频
+    if (currentAudio.value) {
+      currentAudio.value.pause()
+      currentAudio.value = null
+    }
+    
     currentSlide.value++
+    audioProgress.value = 0
+    isPlaying.value = false
   }
 }
 
@@ -487,26 +503,52 @@ const nextPreviewSlide = () => {
 const playAudio = () => {
   isPlaying.value = true
   
-  // 模拟播放进度
-  const interval = setInterval(() => {
-    audioProgress.value += 1
-    if (audioProgress.value >= 100) {
-      clearInterval(interval)
-      isPlaying.value = false
-      
-      // 自动播放下一张幻灯片
-      if (currentSlide.value < slides.value.length - 1) {
-        setTimeout(() => {
-          nextSlide()
-          audioProgress.value = 0
-        }, 1000)
-      }
+  // 获取当前课件的音频文件路径
+  const audioPath = `/assets/${currentCourse.value.title}/wavs/${currentSlide.value + 1}.wav`
+  
+  // 创建音频元素
+  const audio = new Audio(audioPath)
+  
+  // 监听音频加载错误
+  audio.onerror = () => {
+    ElMessage.error(`无法加载音频文件: ${audioPath}`)
+    isPlaying.value = false
+  }
+  
+  // 监听音频播放进度
+  audio.ontimeupdate = () => {
+    audioProgress.value = Math.floor((audio.currentTime / audio.duration) * 100)
+  }
+  
+  // 监听音频播放结束
+  audio.onended = () => {
+    isPlaying.value = false
+    audioProgress.value = 0
+    
+    // 自动播放下一张幻灯片
+    if (currentSlide.value < slides.value.length - 1) {
+      setTimeout(() => {
+        nextSlide()
+      }, 1000)
     }
-  }, 100)
+  }
+  
+  // 开始播放
+  audio.play().catch(error => {
+    console.error('播放音频时出错:', error)
+    ElMessage.error('播放音频时出错')
+    isPlaying.value = false
+  })
+  
+  // 保存音频元素引用，以便暂停时使用
+  currentAudio.value = audio
 }
 
 const pauseAudio = () => {
-  isPlaying.value = false
+  if (currentAudio.value) {
+    currentAudio.value.pause()
+    isPlaying.value = false
+  }
 }
 
 const formatProgress = (percentage) => {
@@ -787,7 +829,17 @@ const handlePreviewImageError = (index) => {
   previewImageStates.value[index] = { loading: false, error: true }
 }
 
+// 添加音频元素引用
+const currentAudio = ref(null)
+
+// 修改关闭预览对话框的处理函数
 const handleClosePreview = () => {
+  // 停止音频播放
+  if (currentAudio.value) {
+    currentAudio.value.pause()
+    currentAudio.value = null
+  }
+  
   // 清理预览状态
   previewVisible.value = false
   currentSlide.value = 0
