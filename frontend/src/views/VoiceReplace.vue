@@ -49,9 +49,9 @@
         <el-form-item label="视频文件">
           <el-upload
             class="video-uploader"
-            action="/api/upload/video"
-            :on-success="handleUploadSuccess"
-            :before-upload="beforeUpload"
+            action="#"
+            :auto-upload="false"
+            :on-change="handleFileChange"
             :on-exceed="handleExceed"
             :limit="1"
             :file-list="fileList"
@@ -63,6 +63,28 @@
               </div>
             </template>
           </el-upload>
+          
+          <!-- 上传进度条 -->
+          <div v-if="isUploading || uploadFinished" class="upload-progress-container">
+            <div class="upload-progress-bar">
+              <div class="upload-progress-inner" :style="{ width: `${uploadProgress}%` }"></div>
+            </div>
+            <div class="upload-progress-info">
+              <span v-if="!uploadFinished">{{ uploadProgress }}%</span>
+              <span v-else class="upload-success-icon">✓</span>
+            </div>
+          </div>
+          
+          <!-- 文件上传状态 -->
+          <div v-if="uploadFinished" class="upload-file-info">
+            <div class="upload-file-name">
+              <i class="el-icon-document"></i>
+              <span>{{ uploadedFileName }}</span>
+            </div>
+            <div class="upload-status">
+              <span class="upload-success-text">上传成功</span>
+            </div>
+          </div>
         </el-form-item>
         <el-form-item label="默认语音">
           <el-select v-model="uploadForm.defaultVoice" placeholder="选择默认语音">
@@ -182,24 +204,34 @@
       width="70%"
       center
       destroy-on-close
+      @closed="closePreview"
     >
       <div class="preview-content">
-        <video
-          v-if="previewVideo.url"
-          :src="previewVideo.url"
-          controls
-          autoplay
-          class="preview-player"
-        ></video>
-        <div class="subtitle-display">
-          <div class="subtitle-box">
-            {{ currentPreviewSubtitle }}
+        <div class="video-container">
+          <video
+            v-if="previewVideo.url"
+            :src="previewVideo.url"
+            controls
+            class="preview-player"
+            ref="previewVideoRef"
+          ></video>
+          
+          <!-- 字幕覆盖在视频上 -->
+          <div class="subtitle-overlay" v-if="isSubtitlesLoaded">
+            <div class="subtitle-box" v-if="currentPreviewSubtitle">
+              {{ currentPreviewSubtitle }}
+            </div>
+          </div>
+          
+          <!-- 加载中提示 -->
+          <div class="subtitle-loading-overlay" v-if="!isSubtitlesLoaded">
+            <div class="subtitle-loading">加载字幕中...</div>
           </div>
         </div>
       </div>
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="previewDialogVisible = false">关闭</el-button>
+          <el-button @click="closePreview">关闭</el-button>
           <el-button type="success" @click="handleDownload">下载</el-button>
         </span>
       </template>
@@ -237,6 +269,12 @@ const uploadForm = reactive({
 })
 const fileList = ref([])
 
+// 上传进度相关
+const uploadProgress = ref(0)
+const isUploading = ref(false)
+const uploadFinished = ref(false)
+const uploadedFileName = ref('')
+
 // 对话框相关
 const dialogVisible = ref(false)
 const currentVideo = reactive({
@@ -252,6 +290,9 @@ const previewVideo = reactive({
   title: ''
 })
 const currentPreviewSubtitle = ref('')
+const subtitlesData = ref([]) // 存储字幕数据
+const isSubtitlesLoaded = ref(false) // 添加字幕加载状态标志
+const previewVideoRef = ref(null) // 添加视频元素引用
 
 // 视频播放器引用
 const videoPlayer = ref(null)
@@ -330,7 +371,22 @@ const openUploadDialog = () => {
   uploadForm.title = ''
   uploadForm.defaultVoice = '1'
   fileList.value = []
+  uploadProgress.value = 0
+  isUploading.value = false
+  uploadFinished.value = false
+  uploadedFileName.value = ''
   uploadDialogVisible.value = true
+}
+
+// 处理文件选择事件
+const handleFileChange = (file) => {
+  if (file && file.raw) {
+    // 检查文件类型和大小
+    if (beforeUpload(file.raw)) {
+      // 开始模拟上传
+      simulateUploadProgress()
+    }
+  }
 }
 
 const beforeUpload = (file) => {
@@ -347,7 +403,34 @@ const beforeUpload = (file) => {
     return false
   }
   
-  return isVideo && isLt50M
+  // 提取文件名（不含扩展名）作为标题
+  const fileName = file.name.split('.').slice(0, -1).join('.')
+  if (!uploadForm.title) {
+    uploadForm.title = fileName
+  }
+  
+  // 保存文件名用于显示
+  uploadedFileName.value = file.name
+  
+  return true
+}
+
+// 模拟上传进度
+const simulateUploadProgress = () => {
+  isUploading.value = true
+  uploadProgress.value = 0
+  uploadFinished.value = false
+  
+  const interval = setInterval(() => {
+    if (uploadProgress.value < 100) {
+      uploadProgress.value += 2
+    } else {
+      clearInterval(interval)
+      uploadFinished.value = true
+      isUploading.value = false
+      ElMessage.success('上传成功')
+    }
+  }, 100)
 }
 
 const handleExceed = () => {
@@ -355,8 +438,7 @@ const handleExceed = () => {
 }
 
 const handleUploadSuccess = (response, file) => {
-  ElMessage.success('上传成功')
-  // 实际项目中，response会包含上传后的视频URL和其他信息
+  // 不再使用，由模拟上传取代
 }
 
 const handleUploadSubmit = () => {
@@ -365,7 +447,7 @@ const handleUploadSubmit = () => {
     return
   }
   
-  if (fileList.value.length === 0) {
+  if (!uploadFinished.value && !isUploading.value) {
     ElMessage.warning('请上传视频文件')
     return
   }
@@ -379,7 +461,8 @@ const handleUploadSubmit = () => {
     title: uploadForm.title,
     duration: '00:02:30', // 模拟视频时长
     status: 'processing',
-    url: URL.createObjectURL(fileList.value[0].raw) // 使用本地Blob URL
+    // 使用固定的示例视频URL
+    url: 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4'
   }
   
   videoList.value.unshift(newVideo)
@@ -408,26 +491,189 @@ const handleEdit = (row) => {
 }
 
 const handlePreview = (row) => {
-  previewVideo.url = row.url || 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4'
-  previewVideo.title = row.title
+  // 使用演示视频
+  const videoPath = '/assets/vedio/演示视频.mp4'
+  previewVideo.url = videoPath
+  previewVideo.title = row.title || '演示视频'
   currentPreviewSubtitle.value = ''
   previewDialogVisible.value = true
   
-  // 模拟字幕显示
-  let subtitleIndex = 0
-  const subtitleInterval = setInterval(() => {
-    if (!previewDialogVisible.value) {
-      clearInterval(subtitleInterval)
-      return
+  // 重置字幕状态
+  subtitlesData.value = []
+  isSubtitlesLoaded.value = false
+  
+  // 加载SRT字幕
+  loadSubtitlesFromSRT()
+}
+
+// 解析SRT字幕格式
+const parseSRT = (srtContent) => {
+  try {
+    console.log('开始解析SRT内容，原始内容长度:', srtContent.length)
+    const subtitles = []
+    // 处理不同操作系统的换行符
+    const normalizedContent = srtContent.replace(/\r\n/g, '\n')
+    const chunks = normalizedContent.trim().split('\n\n')
+    console.log(`分割后得到${chunks.length}个字幕块`)
+    
+    for (const chunk of chunks) {
+      try {
+        const lines = chunk.split('\n')
+        if (lines.length >= 3) {
+          const index = parseInt(lines[0].trim())
+          const timeInfo = lines[1].trim()
+          // 保留字幕的原始格式，不合并行
+          const textLines = lines.slice(2)
+          const text = textLines.join('\n').trim()
+          
+          // 检查时间格式是否正确
+          if (!timeInfo.includes(' --> ')) {
+            console.warn('时间格式异常:', timeInfo)
+            continue
+          }
+          
+          // 解析时间信息 "00:00:00,000 --> 00:00:03,000"
+          const times = timeInfo.split(' --> ')
+          if (times.length === 2) {
+            const startTime = parseTimeString(times[0])
+            const endTime = parseTimeString(times[1])
+            
+            if (isNaN(startTime) || isNaN(endTime)) {
+              console.warn('时间解析异常:', times[0], times[1])
+              continue
+            }
+            
+            // 添加日志用于排查
+            if (index <= 5 || index % 50 === 0) {
+              console.log(`字幕#${index}: ${startTime}s --> ${endTime}s "${text.replace(/\n/g, '\\n').substring(0, 30)}${text.length > 30 ? '...' : ''}"`)
+            }
+            
+            subtitles.push({
+              index,
+              startTime,
+              endTime,
+              text
+            })
+          }
+        } else {
+          console.warn('字幕块格式异常:', chunk)
+        }
+      } catch (err) {
+        console.error('解析字幕块失败:', err, chunk)
+      }
     }
     
-    if (subtitleIndex < subtitleList.value.length) {
-      currentPreviewSubtitle.value = subtitleList.value[subtitleIndex].text
-      subtitleIndex++
-    } else {
-      clearInterval(subtitleInterval)
+    console.log(`成功解析了${subtitles.length}条字幕`)
+    return subtitles
+  } catch (error) {
+    console.error('解析字幕文件失败:', error)
+    return []
+  }
+}
+
+// 将SRT格式的时间字符串转换为秒数
+const parseTimeString = (timeStr) => {
+  try {
+    // 格式: "00:00:00,000"
+    const cleanTimeStr = timeStr.trim().replace(',', '.')
+    const parts = cleanTimeStr.split(':')
+    if (parts.length === 3) {
+      const hours = parseInt(parts[0])
+      const minutes = parseInt(parts[1])
+      const seconds = parseFloat(parts[2])
+      return hours * 3600 + minutes * 60 + seconds
     }
-  }, 5000)
+    return 0
+  } catch (error) {
+    console.error('解析时间字符串失败:', timeStr, error)
+    return 0
+  }
+}
+
+// 加载SRT字幕
+const loadSubtitlesFromSRT = async () => {
+  try {
+    console.log('开始加载字幕文件...')
+    const response = await fetch('/assets/vedio/演示视频.srt')
+    if (!response.ok) {
+      throw new Error(`无法加载字幕文件: ${response.status} ${response.statusText}`)
+    }
+    
+    const srtContent = await response.text()
+    console.log('成功获取字幕文件内容，长度:', srtContent.length)
+    
+    // 解析SRT字幕
+    subtitlesData.value = parseSRT(srtContent)
+    
+    if (subtitlesData.value.length === 0) {
+      throw new Error('字幕解析失败或没有有效字幕')
+    }
+    
+    isSubtitlesLoaded.value = true
+    console.log('字幕加载成功，共', subtitlesData.value.length, '条')
+    
+    // 等待DOM更新并设置视频事件监听
+    setTimeout(() => {
+      if (previewVideoRef.value) {
+        console.log('添加视频时间更新事件监听...')
+        previewVideoRef.value.addEventListener('timeupdate', updateSubtitleForPreview)
+        
+        // 确保视频可以自动播放
+        previewVideoRef.value.addEventListener('canplay', () => {
+          // 尝试自动播放视频
+          previewVideoRef.value.play().catch(error => {
+            console.warn('无法自动播放视频:', error)
+            // 自动播放失败，等待用户手动播放
+          })
+        })
+      } else {
+        console.error('未找到视频元素')
+      }
+    }, 300)
+  } catch (error) {
+    console.error('加载字幕出错:', error)
+    ElMessage.warning(`字幕加载失败: ${error.message}`)
+    isSubtitlesLoaded.value = true // 即使失败也设置为加载完成，以便移除加载提示
+  }
+}
+
+// 更新预览中的字幕
+const updateSubtitleForPreview = (event) => {
+  if (!isSubtitlesLoaded.value || subtitlesData.value.length === 0) {
+    return
+  }
+  
+  const currentTime = event.target.currentTime
+  
+  // 查找当前时间应该显示的字幕
+  const currentSubtitle = subtitlesData.value.find(
+    sub => currentTime >= sub.startTime && currentTime <= sub.endTime
+  )
+  
+  // 只在字幕发生变化时更新
+  if (currentSubtitle) {
+    if (currentPreviewSubtitle.value !== currentSubtitle.text) {
+      console.log(`当前时间${currentTime.toFixed(2)}秒，显示字幕#${currentSubtitle.index}`)
+      currentPreviewSubtitle.value = currentSubtitle.text
+    }
+  } else {
+    if (currentPreviewSubtitle.value !== '') {
+      console.log(`当前时间${currentTime.toFixed(2)}秒，无匹配字幕`)
+      currentPreviewSubtitle.value = ''
+    }
+  }
+}
+
+// 关闭预览时清理事件监听
+const closePreview = () => {
+  if (previewVideoRef.value) {
+    previewVideoRef.value.removeEventListener('timeupdate', updateSubtitleForPreview)
+    previewVideoRef.value.pause()
+  }
+  previewDialogVisible.value = false
+  currentPreviewSubtitle.value = ''
+  subtitlesData.value = []
+  isSubtitlesLoaded.value = false
 }
 
 const handleExport = (row) => {
@@ -745,7 +991,13 @@ const handleTestVoice = () => {
 .preview-content {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+}
+
+.video-container {
+  position: relative;
+  width: 100%;
+  max-height: 450px;
+  background-color: #000;
 }
 
 .preview-player {
@@ -754,29 +1006,152 @@ const handleTestVoice = () => {
   object-fit: contain;
 }
 
-.subtitle-display {
-  padding: 10px;
-  background-color: #f5f7fa;
-  border-radius: 4px;
-  min-height: 60px;
+.subtitle-overlay {
+  position: absolute;
+  bottom: 70px;
+  left: 0;
+  right: 0;
   display: flex;
   justify-content: center;
   align-items: center;
+  z-index: 10;
+  pointer-events: none; /* 允许点击穿透到视频 */
+  padding: 0 20px;
+}
+
+.subtitle-loading-overlay {
+  position: absolute;
+  bottom: 50px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
 }
 
 .subtitle-box {
-  background-color: rgba(0, 0, 0, 0.8);
+  background-color: transparent;
   color: white;
-  padding: 10px 20px;
-  border-radius: 4px;
-  font-size: 16px;
+  padding: 12px 20px;
+  font-size: 22px;
+  font-weight: bold;
+  line-height: 1.5;
   text-align: center;
+  max-width: 90%;
   min-width: 60%;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 1), 
+               -2px -2px 4px rgba(0, 0, 0, 1),
+               2px -2px 4px rgba(0, 0, 0, 1),
+               -2px 2px 4px rgba(0, 0, 0, 1);
+  border: none;
+  box-shadow: none;
+  word-break: break-word;
+  white-space: pre-line; /* 保留换行符 */
+}
+
+.subtitle-loading {
+  background-color: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 14px;
+  padding: 5px 10px;
+  border-radius: 4px;
 }
 
 .dialog-footer {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.upload-progress-container {
+  margin-top: 15px;
+  margin-bottom: 15px;
+  display: flex;
+  position: relative;
+  width: 100%;
+  height: 24px;
+}
+
+.upload-progress-bar {
+  height: 24px;
+  background-color: #f0f0f0;
+  border-radius: 12px;
+  overflow: hidden;
+  flex: 1;
+  position: relative;
+}
+
+.upload-progress-inner {
+  height: 100%;
+  background: linear-gradient(90deg, #409eff, #67c23a);
+  transition: width 0.3s ease;
+  border-radius: 12px;
+}
+
+.upload-progress-info {
+  position: absolute;
+  right: 10px;
+  top: 0;
+  height: 24px;
+  line-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  color: #fff;
+  font-weight: bold;
+}
+
+.upload-success-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background-color: #67c23a;
+  color: white;
+  border-radius: 50%;
+  font-weight: bold;
+}
+
+.upload-file-info {
+  margin-top: 15px;
+  padding: 10px;
+  border-radius: 4px;
+  background-color: #f9f9f9;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.upload-file-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #333;
+}
+
+.upload-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.upload-success-text {
+  color: #67c23a;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+}
+
+.upload-success-text:before {
+  content: "✓";
+  display: inline-block;
+  margin-right: 4px;
+  font-weight: bold;
 }
 </style> 
